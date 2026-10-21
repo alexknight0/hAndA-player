@@ -69,23 +69,10 @@
   <dialog id="sync-dialog" class="sync-dialog" aria-labelledby="sync-title">
     <h2 id="sync-title">Sync between devices</h2>
     <p id="sync-status" class="sync-status" role="status"></p>
-
-    <form id="sync-form" method="dialog">
-      <p>Progress is saved to a private GitHub Gist. Paste the same token on each device.</p>
-      <ol class="sync-steps">
-        <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=hAndA%20player" target="_blank" rel="noopener">Create a token</a> (only the <b>gist</b> box ticked), then copy it.</li>
-        <li>Paste it here:</li>
-      </ol>
-      <input id="sync-token" type="password" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="GitHub token">
-      <div class="sync-actions">
-        <button id="sync-save" type="button" class="primary">Connect</button>
-        <button type="submit">Close</button>
-      </div>
-    </form>
-
-    <div id="sync-connected" class="sync-actions" hidden>
-      <button id="sync-now" type="button" class="primary">Sync now</button>
-      <button id="sync-disconnect" type="button">Disconnect</button>
+    <p>Sign in with the same Google account on each device to keep listening progress in sync.</p>
+    <div class="sync-actions">
+      <button id="sync-signin" type="button" class="primary">Sign in with Google</button>
+      <button id="sync-signout" type="button" hidden>Sign out</button>
       <button id="sync-close" type="button">Close</button>
     </div>
   </dialog>
@@ -95,5 +82,6 @@
   <script src="id3.js"></script>
   <script src="progress.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="sync.js"></script>
 </body>
 </html>

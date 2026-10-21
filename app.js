@@ -110,6 +110,12 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+// Status line text; `loading` adds a spinner in front of it.
+function setStatus(node, text, loading = false) {
+  node.textContent = text;
+  node.classList.toggle("loading", loading && Boolean(text));
+}
+
 // ---------- episode list ----------
 
 function toEpisode(r) {
@@ -132,7 +138,8 @@ async function loadEpisodes() {
     episodes = JSON.parse(cached).map((e) => ({ ...e, date: new Date(e.date) }));
     renderList();
   }
-  status.textContent = episodes.length ? "" : "Loading episodes…";
+  setStatus(status, episodes.length ? "" : "Loading episodes…", true);
+  $("refresh").classList.add("spinning");
   try {
     const resp = await fetch(LOOKUP_URL);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -142,12 +149,14 @@ async function loadEpisodes() {
       .map(toEpisode)
       .sort((a, b) => b.date - a.date);
     localStorage.setItem("episodes", JSON.stringify(episodes));
-    status.textContent = "";
+    setStatus(status, "");
     renderList();
   } catch (err) {
-    status.textContent = episodes.length
+    setStatus(status, episodes.length
       ? `Couldn't refresh (${err.message}). Showing saved list.`
-      : `Couldn't load episodes (${err.message}).`;
+      : `Couldn't load episodes (${err.message}).`);
+  } finally {
+    $("refresh").classList.remove("spinning");
   }
 }
 
@@ -207,6 +216,8 @@ function openEpisode(ep) {
   seek.value = 0;
   updateTimes();
   updateDoneButton();
+  updateLoading();
+  setBusy(false);
   setupMediaSession();
   loadChapters(ep);
 }
@@ -215,7 +226,7 @@ async function loadChapters(ep) {
   if (chapterAbort) chapterAbort.abort();
   chapterAbort = new AbortController();
   const signal = chapterAbort.signal;
-  $("chapter-status").textContent = "Loading chapters…";
+  setStatus($("chapter-status"), "Loading chapters…", true);
   try {
     const info = await ID3.readChapters(ep.url, signal);
     if (current !== ep) return;
@@ -225,10 +236,10 @@ async function loadChapters(ep) {
       ...c,
       title: i === 0 && (c.title === ep.title || !c.title) ? "Intro" : c.title || `Chapter ${i + 1}`,
     }));
-    $("chapter-status").textContent = chapters.length ? "" : "No chapters in this episode.";
+    setStatus($("chapter-status"), chapters.length ? "" : "No chapters in this episode.");
   } catch (err) {
     if (err.name === "AbortError") return;
-    $("chapter-status").textContent = `Couldn't load chapters (${err.message}).`;
+    setStatus($("chapter-status"), `Couldn't load chapters (${err.message}).`);
   }
   renderChapters();
   detectAds(ep, signal);
@@ -258,6 +269,22 @@ async function detectAds(ep, signal) {
   applyResume();
   renderTrack();
   syncUi();
+  updateLoading();
+  // If playback started before detection finished and is inside an ad, skip it now.
+  if (resumeAt === null && adAt(audio.currentTime)) seekTo(audio.currentTime);
+}
+
+// The seek bar shows a loading placeholder until the audio length and ad map are known.
+function updateLoading(failed = false) {
+  const loading = Boolean(current) && !failed && !(fileDuration() && adsSettled);
+  $("seek-wrap").classList.toggle("loading", loading);
+  $("seek-wrap").setAttribute("aria-busy", String(loading));
+}
+
+// Spinner on the play button while audio is buffering.
+function setBusy(busy) {
+  $("play").classList.toggle("busy", busy);
+  $("play").setAttribute("aria-busy", String(busy));
 }
 
 // Seek to the saved position once metadata and the ad map are ready.
@@ -463,7 +490,8 @@ function setupMediaSession() {
 
 function play() {
   applyResume(true); // don't wait for ad detection if the user is ready to listen
-  return audio.play();
+  if (audio.readyState < 3) setBusy(true);
+  return audio.play().catch(() => setBusy(false));
 }
 
 $("play").addEventListener("click", () => (audio.paused ? play() : audio.pause()));
@@ -490,6 +518,7 @@ audio.addEventListener("loadedmetadata", () => {
   renderTrack();
   applyResume();
   syncUi();
+  updateLoading();
 });
 audio.addEventListener("timeupdate", () => {
   // Auto-skip ads (only known on episodes whose ads could be detected; see ads.js).
@@ -498,10 +527,14 @@ audio.addEventListener("timeupdate", () => {
   if (Math.abs(audio.currentTime - lastSaved) >= SAVE_EVERY_SECONDS) savePos();
 });
 audio.addEventListener("play", () => { updatePlayButton(); updatePositionState(); });
-audio.addEventListener("pause", () => { updatePlayButton(); savePos(); });
-audio.addEventListener("ended", () => { updatePlayButton(); savePos(); setDone(current.guid, true); });
+audio.addEventListener("pause", () => { setBusy(false); updatePlayButton(); savePos(); });
+audio.addEventListener("waiting", () => { if (!audio.paused) setBusy(true); });
+audio.addEventListener("playing", () => setBusy(false));
+audio.addEventListener("ended", () => { setBusy(false); updatePlayButton(); savePos(); setDone(current.guid, true); });
 audio.addEventListener("error", () => {
-  $("chapter-status").textContent = "Couldn't play this episode. Check your connection and try again.";
+  setBusy(false);
+  updateLoading(true);
+  setStatus($("chapter-status"), "Couldn't play this episode. Check your connection and try again.");
 });
 
 // Keyboard shortcuts (handy on desktop): space = play/pause, arrows = ±10s.

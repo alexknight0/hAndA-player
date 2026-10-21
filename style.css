@@ -123,10 +123,66 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   text-align: center;
 }
 
+/* Seek bar: a transparent range input over a track split into chapter segments. */
+.seek-bar { position: relative; height: 32px; }
+
+.seek-track {
+  position: absolute;
+  /* Inset by half the thumb width so segments line up with the thumb's travel. */
+  left: 9px;
+  right: 7px;
+  top: 50%;
+  height: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: #343b45;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.seg.active { background: #4a5360; }
+.seg .fill { height: 100%; width: 0; background: var(--accent); }
+.seg.ad { background: repeating-linear-gradient(135deg, #2a3038 0 3px, #39414b 3px 6px); }
+.seg.ad .fill { background: #8a6d1c; }
+
 .seek input {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 32px;
-  accent-color: var(--accent);
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.seek input::-webkit-slider-runnable-track { height: 32px; background: transparent; }
+.seek input::-moz-range-track { height: 32px; background: transparent; }
+
+.seek input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+.seek input::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--bg);
 }
 
 .times {

@@ -42,7 +42,10 @@
       <p id="current-chapter" class="current-chapter" aria-live="polite"></p>
 
       <div class="seek">
-        <input id="seek" type="range" min="0" max="0" step="1" value="0" aria-label="Seek">
+        <div class="seek-bar">
+          <div id="seek-track" class="seek-track" aria-hidden="true"></div>
+          <input id="seek" type="range" min="0" max="0" step="1" value="0" aria-label="Seek">
+        </div>
         <div class="times">
           <span id="time-cur">0:00</span>
           <span id="time-dur">0:00</span>
@@ -80,6 +83,7 @@
   <audio id="audio" preload="metadata"></audio>
 
   <script src="id3.js"></script>
+  <script src="ads.js"></script>
   <script src="progress.js"></script>
   <script src="app.js"></script>
   <script type="module" src="sync.js"></script>

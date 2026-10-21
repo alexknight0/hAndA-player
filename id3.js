@@ -25,9 +25,16 @@ const ID3 = (() => {
   }
 
   async function fetchBytes(url, n, signal) {
-    const resp = await fetch(url, { headers: { Range: `bytes=0-${n - 1}` }, signal });
+    return (await fetchRange(url, 0, n, signal)).bytes;
+  }
+
+  // Fetch n bytes starting at `start`. Also returns the final URL after redirects.
+  async function fetchRange(url, start, n, signal) {
+    const resp = await fetch(url, { headers: { Range: `bytes=${start}-${start + n - 1}` }, signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return readUpTo(resp, n);
+    // A server that ignores Range (200) would send the file from byte 0.
+    if (resp.status !== 206 && start > 0) throw new Error("server ignored Range request");
+    return { bytes: await readUpTo(resp, n), url: resp.url };
   }
 
   const syncsafe = (b, o) =>
@@ -77,17 +84,19 @@ const ID3 = (() => {
     return { start: startMs / 1000, end: endMs / 1000, title };
   }
 
-  // Returns chapters sorted by start time: [{start, end, title}] (seconds).
+  // Returns { chapters: [{start, end, title}] (seconds, sorted), tagSize (bytes),
+  // url (final URL after redirects, for follow-up Range requests) }.
   async function readChapters(url, signal) {
-    let b = await fetchBytes(url, INITIAL_BYTES, signal);
-    if (b.length < 10 || b[0] !== 0x49 || b[1] !== 0x44 || b[2] !== 0x33) return []; // "ID3"
+    let { bytes: b, url: finalUrl } = await fetchRange(url, 0, INITIAL_BYTES, signal);
+    const none = { chapters: [], tagSize: 0, url: finalUrl };
+    if (b.length < 10 || b[0] !== 0x49 || b[1] !== 0x44 || b[2] !== 0x33) return none; // "ID3"
     const version = b[3];
-    if (version !== 3 && version !== 4) return [];
     const flags = b[5];
-    const tagEnd = 10 + syncsafe(b, 6);
+    const tagEnd = 10 + syncsafe(b, 6) + (flags & 0x10 ? 10 : 0); // + footer
+    if (version !== 3 && version !== 4) return { ...none, tagSize: tagEnd };
     if (tagEnd > b.length) {
-      if (tagEnd > MAX_TAG_BYTES) return [];
-      b = await fetchBytes(url, tagEnd, signal);
+      if (tagEnd > MAX_TAG_BYTES) return { ...none, tagSize: tagEnd };
+      b = await fetchBytes(finalUrl, tagEnd, signal);
     }
 
     let start = 10;
@@ -96,11 +105,12 @@ const ID3 = (() => {
       start += version === 4 ? syncsafe(b, 10) : uint32(b, 10) + 4;
     }
 
-    return parseFrames(b, start, Math.min(tagEnd, b.length), version)
+    const chapters = parseFrames(b, start, Math.min(tagEnd, b.length), version)
       .filter((f) => f.id === "CHAP")
       .map((f) => parseChap(f.body, version))
       .filter(Boolean)
       .sort((a, c) => a.start - c.start);
+    return { chapters, tagSize: tagEnd, url: finalUrl };
   }
 
   return { readChapters };

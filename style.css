@@ -10,6 +10,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   background: var(--bg);
@@ -219,3 +221,46 @@ body:not(.locked) .gate { display: none; }
 }
 
 .gate-error { min-height: 1.4em; margin: 0; color: #ff8a80; text-align: center; }
+
+/* Sync */
+.sync-btn { color: var(--muted); }
+.sync-btn[data-state="ok"] { color: var(--accent); }
+.sync-btn[data-state="syncing"] { color: var(--text); }
+.sync-btn[data-state="error"] { color: #ff8a80; }
+
+.sync-dialog {
+  width: min(92vw, 420px);
+  border: 1px solid var(--panel);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 20px;
+}
+
+.sync-dialog::backdrop { background: rgb(0 0 0 / 60%); }
+.sync-dialog h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.sync-dialog a { color: var(--accent); }
+.sync-status { color: var(--muted); margin: 0 0 8px; }
+.sync-status.error { color: #ff8a80; }
+.sync-steps { padding-left: 1.2em; }
+
+.sync-dialog input {
+  width: 100%;
+  font: inherit;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--muted);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.sync-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+.sync-actions button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.sync-actions button.primary { background: var(--accent); color: var(--accent-text); font-weight: 700; }

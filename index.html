@@ -24,6 +24,7 @@
   <main id="list-view" class="view">
     <header class="bar">
       <h1>Hamish &amp; Andy</h1>
+      <button id="sync-btn" class="icon-btn sync-btn" aria-label="Sync settings" data-state="off">☁</button>
       <button id="refresh" class="icon-btn" aria-label="Refresh episode list">⟳</button>
     </header>
     <p id="list-status" class="status" role="status">Loading episodes…</p>
@@ -64,9 +65,35 @@
     </section>
   </main>
 
+  <!-- Sync settings -->
+  <dialog id="sync-dialog" class="sync-dialog" aria-labelledby="sync-title">
+    <h2 id="sync-title">Sync between devices</h2>
+    <p id="sync-status" class="sync-status" role="status"></p>
+
+    <form id="sync-form" method="dialog">
+      <p>Progress is saved to a private GitHub Gist. Paste the same token on each device.</p>
+      <ol class="sync-steps">
+        <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=hAndA%20player" target="_blank" rel="noopener">Create a token</a> (only the <b>gist</b> box ticked), then copy it.</li>
+        <li>Paste it here:</li>
+      </ol>
+      <input id="sync-token" type="password" placeholder="ghp_…" autocomplete="off" spellcheck="false" aria-label="GitHub token">
+      <div class="sync-actions">
+        <button id="sync-save" type="button" class="primary">Connect</button>
+        <button type="submit">Close</button>
+      </div>
+    </form>
+
+    <div id="sync-connected" class="sync-actions" hidden>
+      <button id="sync-now" type="button" class="primary">Sync now</button>
+      <button id="sync-disconnect" type="button">Disconnect</button>
+      <button id="sync-close" type="button">Close</button>
+    </div>
+  </dialog>
+
   <audio id="audio" preload="metadata"></audio>
 
   <script src="id3.js"></script>
+  <script src="progress.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

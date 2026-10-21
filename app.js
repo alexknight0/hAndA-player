@@ -31,23 +31,19 @@ function fmtTime(sec) {
 const fmtDate = (d) =>
   d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-const posKey = (guid) => `pos:${guid}`;
-const getPos = (guid) => Number(localStorage.getItem(posKey(guid))) || 0;
-
-// "Played" flag per episode. Set automatically near the end, or manually from the player.
-const doneKey = (guid) => `done:${guid}`;
-const isDone = (guid) => localStorage.getItem(doneKey(guid)) === "1";
+// Progress lives in progress.js (local storage + optional GitHub Gist sync).
+const getPos = (guid) => Progress.get(guid).pos;
+const isDone = (guid) => Progress.get(guid).done;
 const FINISHED_WITHIN_SECONDS = 60; // counts as played once this close to the end
 
 function setDone(guid, done) {
-  if (done) localStorage.setItem(doneKey(guid), "1");
-  else localStorage.removeItem(doneKey(guid));
+  Progress.setDone(guid, done);
   if (current && current.guid === guid) updateDoneButton();
 }
 
 function savePos() {
   if (!current || !isFinite(audio.currentTime)) return;
-  localStorage.setItem(posKey(current.guid), String(Math.floor(audio.currentTime)));
+  Progress.setPos(current.guid, audio.currentTime);
   lastSaved = audio.currentTime;
   const d = duration();
   if (d && d - audio.currentTime <= FINISHED_WITHIN_SECONDS && !isDone(current.guid)) {
@@ -338,7 +334,7 @@ audio.addEventListener("timeupdate", () => {
   if (Math.abs(audio.currentTime - lastSaved) >= SAVE_EVERY_SECONDS) savePos();
 });
 audio.addEventListener("play", () => { updatePlayButton(); updatePositionState(); });
-audio.addEventListener("pause", () => { updatePlayButton(); savePos(); });
+audio.addEventListener("pause", () => { updatePlayButton(); savePos(); Progress.syncNow(); });
 audio.addEventListener("ended", () => { updatePlayButton(); savePos(); setDone(current.guid, true); });
 audio.addEventListener("error", () => {
   $("chapter-status").textContent = "Couldn't play this episode. Check your connection and try again.";
@@ -352,8 +348,75 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowRight") $("fwd10").click();
 });
 
-window.addEventListener("pagehide", savePos);
-document.addEventListener("visibilitychange", () => { if (document.hidden) savePos(); });
+window.addEventListener("pagehide", () => { savePos(); Progress.flushOnExit(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    savePos();
+    Progress.flushOnExit();
+  } else {
+    Progress.syncNow(); // pick up progress from other devices
+  }
+});
+
+// ---------- sync UI ----------
+
+const syncDialog = $("sync-dialog");
+
+function fmtAgo(ms) {
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(ms).toLocaleString();
+}
+
+function renderSyncStatus(status = {}) {
+  const on = Progress.enabled();
+  const state = on ? status.state || "ok" : "off";
+  $("sync-btn").dataset.state = state;
+  $("sync-btn").setAttribute("aria-label", `Sync settings (${on ? state : "not connected"})`);
+  $("sync-form").hidden = on;
+  $("sync-connected").hidden = !on;
+  const statusEl = $("sync-status");
+  statusEl.classList.toggle("error", state === "error");
+  if (!on) statusEl.textContent = status.message || "Not connected. Progress is only saved on this device.";
+  else if (state === "syncing") statusEl.textContent = "Syncing…";
+  else if (state === "error") statusEl.textContent = `Sync failed: ${status.message}`;
+  else statusEl.textContent = Progress.lastSync() ? `Connected. Last synced ${fmtAgo(Progress.lastSync())}.` : "Connected.";
+}
+
+Progress.on("status", renderSyncStatus);
+
+// Another device changed something: refresh the list and, if the loaded
+// episode is paused, jump to its synced position.
+Progress.on("change", () => {
+  if (!$("list-view").hidden) renderList();
+  if (current) {
+    updateDoneButton();
+    const pos = getPos(current.guid);
+    if (audio.paused && Math.abs(pos - audio.currentTime) > 5) {
+      if (audio.readyState >= 1) audio.currentTime = pos;
+      else pendingResume = pos;
+      seek.value = pos;
+      updateTimes(pos);
+      highlightChapter();
+    }
+  }
+});
+
+$("sync-btn").addEventListener("click", () => {
+  renderSyncStatus();
+  syncDialog.showModal();
+});
+$("sync-save").addEventListener("click", async () => {
+  const token = $("sync-token").value.trim();
+  if (!token) return $("sync-token").focus();
+  await Progress.connect(token);
+  $("sync-token").value = "";
+});
+$("sync-now").addEventListener("click", () => Progress.syncNow());
+$("sync-disconnect").addEventListener("click", () => Progress.disconnect());
+$("sync-close").addEventListener("click", () => syncDialog.close());
 
 // ---------- routing (#ep=<guid> shows the player; empty hash shows the list) ----------
 
@@ -385,7 +448,9 @@ const UNLOCK_KEY = "unlocked";
 function startApp() {
   document.body.classList.remove("locked");
   window.addEventListener("hashchange", route);
+  renderSyncStatus();
   loadEpisodes().then(route);
+  Progress.syncNow();
 }
 
 if (localStorage.getItem(UNLOCK_KEY) === "1") {

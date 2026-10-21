@@ -34,10 +34,25 @@ const fmtDate = (d) =>
 const posKey = (guid) => `pos:${guid}`;
 const getPos = (guid) => Number(localStorage.getItem(posKey(guid))) || 0;
 
+// "Played" flag per episode. Set automatically near the end, or manually from the player.
+const doneKey = (guid) => `done:${guid}`;
+const isDone = (guid) => localStorage.getItem(doneKey(guid)) === "1";
+const FINISHED_WITHIN_SECONDS = 60; // counts as played once this close to the end
+
+function setDone(guid, done) {
+  if (done) localStorage.setItem(doneKey(guid), "1");
+  else localStorage.removeItem(doneKey(guid));
+  if (current && current.guid === guid) updateDoneButton();
+}
+
 function savePos() {
   if (!current || !isFinite(audio.currentTime)) return;
   localStorage.setItem(posKey(current.guid), String(Math.floor(audio.currentTime)));
   lastSaved = audio.currentTime;
+  const d = duration();
+  if (d && d - audio.currentTime <= FINISHED_WITHIN_SECONDS && !isDone(current.guid)) {
+    setDone(current.guid, true);
+  }
 }
 
 function el(tag, props = {}, ...children) {
@@ -92,20 +107,23 @@ function renderList() {
   ul.replaceChildren(
     ...episodes.map((ep) => {
       const pos = getPos(ep.guid);
+      const done = isDone(ep.guid);
       const pct = ep.durationSec ? Math.min(100, (pos / ep.durationSec) * 100) : 0;
-      const meta = `${fmtDate(ep.date)} · ${fmtTime(ep.durationSec)}` +
-        (pos > 0 ? ` · ${fmtTime(pos)} listened` : "");
+      let progress = "";
+      if (done) progress = " · ✓ Played";
+      else if (pos > 0) progress = ` · ${fmtTime(Math.max(0, ep.durationSec - pos))} left`;
+      const meta = `${fmtDate(ep.date)} · ${fmtTime(ep.durationSec)}${progress}`;
       const btn = el("button", { type: "button" },
         el("span", { className: "ep-name", textContent: ep.title }),
         el("span", { className: "ep-meta", textContent: meta }),
       );
-      if (pct > 0) {
+      if (pct > 0 && !done) {
         const bar = el("span", { className: "ep-progress" }, el("span"));
         bar.firstChild.style.width = `${pct}%`;
         btn.append(bar);
       }
       btn.addEventListener("click", () => { location.hash = `ep=${encodeURIComponent(ep.guid)}`; });
-      return el("li", {}, btn);
+      return el("li", { className: done ? "done" : "" }, btn);
     }),
   );
 }
@@ -115,7 +133,11 @@ function renderList() {
 function openEpisode(ep) {
   $("ep-title").textContent = ep.title;
   document.title = ep.title;
-  if (current && current.guid === ep.guid) return; // already loaded; keep playing
+  if (current && current.guid === ep.guid) {
+    // Already loaded; keep playing. If it was finished and left at the end, rewind.
+    if (audio.paused && isDone(ep.guid) && duration() - audio.currentTime <= FINISHED_WITHIN_SECONDS) seekTo(0);
+    return;
+  }
 
   if (current) savePos();
   current = ep;
@@ -123,12 +145,15 @@ function openEpisode(ep) {
   renderChapters();
 
   audio.src = ep.url;
-  const resume = getPos(ep.guid);
+  let resume = getPos(ep.guid);
+  // A finished episode reopened from near its end starts again from the beginning.
+  if (isDone(ep.guid) && ep.durationSec - resume <= FINISHED_WITHIN_SECONDS) resume = 0;
   // Start ~2s before where we left off, for context. Applied once metadata loads.
   pendingResume = resume > 0 ? Math.max(0, resume - 2) : 0;
   seek.max = Math.floor(ep.durationSec) || 0;
   seek.value = resume;
   updateTimes(resume);
+  updateDoneButton();
   setupMediaSession();
   loadChapters(ep);
 }
@@ -209,6 +234,13 @@ function updateTimes(t) {
   $("time-dur").textContent = fmtTime(duration());
 }
 
+function updateDoneButton() {
+  if (!current) return;
+  const done = isDone(current.guid);
+  $("mark-done").textContent = done ? "✓ Played — mark as unplayed" : "Mark as played";
+  $("mark-done").setAttribute("aria-pressed", String(done));
+}
+
 function updatePlayButton() {
   const playing = !audio.paused;
   $("play").textContent = playing ? "❚❚" : "▶";
@@ -275,6 +307,7 @@ $("back10").addEventListener("click", () => seekTo(audio.currentTime - SKIP_SECO
 $("fwd10").addEventListener("click", () => seekTo(audio.currentTime + SKIP_SECONDS));
 $("back").addEventListener("click", () => { location.hash = ""; });
 $("refresh").addEventListener("click", loadEpisodes);
+$("mark-done").addEventListener("click", () => setDone(current.guid, !isDone(current.guid)));
 
 // Seek bar: preview while dragging, seek when released.
 seek.addEventListener("input", () => {
@@ -306,7 +339,7 @@ audio.addEventListener("timeupdate", () => {
 });
 audio.addEventListener("play", () => { updatePlayButton(); updatePositionState(); });
 audio.addEventListener("pause", () => { updatePlayButton(); savePos(); });
-audio.addEventListener("ended", () => { updatePlayButton(); savePos(); });
+audio.addEventListener("ended", () => { updatePlayButton(); savePos(); setDone(current.guid, true); });
 audio.addEventListener("error", () => {
   $("chapter-status").textContent = "Couldn't play this episode. Check your connection and try again.";
 });

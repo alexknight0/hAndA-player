@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111418">
+  <title>H&amp;A Player</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Episode list view -->
+  <main id="list-view" class="view">
+    <header class="bar">
+      <h1>Hamish &amp; Andy</h1>
+      <button id="refresh" class="icon-btn" aria-label="Refresh episode list">⟳</button>
+    </header>
+    <p id="list-status" class="status" role="status">Loading episodes…</p>
+    <ul id="episodes" class="episodes"></ul>
+  </main>
+
+  <!-- Player view -->
+  <main id="player-view" class="view" hidden>
+    <header class="bar">
+      <button id="back" class="icon-btn" aria-label="Back to episode list">←</button>
+      <h1 id="ep-title" class="ep-title"></h1>
+    </header>
+
+    <section class="player" aria-label="Player">
+      <p id="current-chapter" class="current-chapter" aria-live="polite"></p>
+
+      <div class="seek">
+        <input id="seek" type="range" min="0" max="0" step="1" value="0" aria-label="Seek">
+        <div class="times">
+          <span id="time-cur">0:00</span>
+          <span id="time-dur">0:00</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="back10" class="ctrl" aria-label="Back 10 seconds">−10</button>
+        <button id="play" class="ctrl play" aria-label="Play">▶</button>
+        <button id="fwd10" class="ctrl" aria-label="Forward 10 seconds">+10</button>
+      </div>
+    </section>
+
+    <section aria-label="Chapters">
+      <h2 class="section-title">Chapters</h2>
+      <p id="chapter-status" class="status" role="status"></p>
+      <ol id="chapters" class="chapters"></ol>
+    </section>
+  </main>
+
+  <audio id="audio" preload="metadata"></audio>
+
+  <script src="id3.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

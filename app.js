@@ -204,6 +204,8 @@ function openEpisode(ep) {
   ads = [];
   adsSettled = false;
   streamInfo = null;
+  loadProgress = 0;
+  setLoadProgress(0);
   renderChapters();
 
   audio.src = ep.url;
@@ -237,6 +239,7 @@ async function loadChapters(ep) {
       title: i === 0 && (c.title === ep.title || !c.title) ? "Intro" : c.title || `Chapter ${i + 1}`,
     }));
     setStatus($("chapter-status"), chapters.length ? "" : "No chapters in this episode.");
+    setLoadProgress(LOAD_STAGES.chapters);
   } catch (err) {
     if (err.name === "AbortError") return;
     setStatus($("chapter-status"), `Couldn't load chapters (${err.message}).`);
@@ -255,7 +258,9 @@ async function detectAds(ep, signal) {
     if (cached && Math.abs(cached.fileDuration - fileDuration()) < 0.5) {
       ads = cached.ads;
     } else if (streamInfo) {
-      const found = await Ads.detect(streamInfo.url, streamInfo.tagSize, fileDuration(), signal);
+      const found = await Ads.detect(streamInfo.url, streamInfo.tagSize, fileDuration(), signal, (done, total) => {
+        if (current === ep) setLoadProgress(LOAD_STAGES.metadata + (1 - LOAD_STAGES.metadata) * (done / total));
+      });
       if (current !== ep) return;
       ads = found || [];
       if (found) localStorage.setItem(cacheKey, JSON.stringify({ fileDuration: fileDuration(), ads }));
@@ -265,6 +270,7 @@ async function detectAds(ep, signal) {
     ads = []; // play on with unadjusted times
   }
   adsSettled = true;
+  setLoadProgress(1);
   rememberDuration(ep.guid, episodeDuration());
   applyResume();
   renderTrack();
@@ -274,8 +280,22 @@ async function detectAds(ep, signal) {
   if (resumeAt === null && adAt(audio.currentTime)) seekTo(audio.currentTime);
 }
 
+// Loading progress (0..1) shown in the placeholder ring. Reading chapters and the
+// audio metadata are quick and count for a little; ad detection (one tiny Range
+// request per probe, reported by Ads.detect) is the rest.
+const LOAD_STAGES = { chapters: 0.08, metadata: 0.15 };
+let loadProgress = 0;
+function setLoadProgress(p) {
+  loadProgress = Math.max(loadProgress, Math.min(1, p));
+  const pct = Math.round(loadProgress * 100);
+  $("seek-wrap").style.setProperty("--p", pct);
+  $("load-pct").textContent = `Loading… ${pct}%`;
+  document.querySelector(".seek-loading").setAttribute("aria-valuenow", String(pct));
+}
+
 // The seek bar shows a loading placeholder until the audio length and ad map are known.
 function updateLoading(failed = false) {
+  if (current && fileDuration()) setLoadProgress(LOAD_STAGES.metadata);
   const loading = Boolean(current) && !failed && !(fileDuration() && adsSettled);
   $("seek-wrap").classList.toggle("loading", loading);
   $("seek-wrap").setAttribute("aria-busy", String(loading));

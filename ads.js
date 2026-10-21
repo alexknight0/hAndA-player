@@ -46,32 +46,48 @@ const Ads = (() => {
     return out;
   }
 
+  // Probes needed to binary-search one STEP-wide interval down to PRECISION.
+  const EDGE_PROBES = Math.ceil(Math.log2(STEP / PRECISION));
+  const TYPICAL_EDGES = 6; // pre-, mid- and post-roll: estimate until the scan has run
+
   // Returns ad ranges [{start, end}] in file seconds ([] = no ads), or null if
   // they can't be detected (older episodes don't mark show frames).
-  async function detect(url, tagSize, fileDuration, signal) {
-    // Quick check: older episodes have no frames marked as show audio, so stop early.
-    const spot = await mapLimit([0.3, 0.5, 0.7].map((x) => x * fileDuration), (t) => kindAt(url, tagSize, t, signal));
-    if (!spot.includes(true)) return null;
-
+  // onProgress(done, total) is called after every probe; `total` is exact once
+  // the coarse scan has found the edges, an estimate before that.
+  async function detect(url, tagSize, fileDuration, signal, onProgress = () => {}) {
     const last = fileDuration - 0.1;
     const times = [];
     for (let t = 0.5; t < last; t += STEP) times.push(t);
     times.push(last);
 
-    const kinds = await mapLimit(times, (t) => kindAt(url, tagSize, t, signal));
+    let done = 0;
+    let total = 3 + times.length + TYPICAL_EDGES * EDGE_PROBES;
+    const probe = async (t) => {
+      const k = await kindAt(url, tagSize, t, signal);
+      onProgress(++done, total);
+      return k;
+    };
+
+    // Quick check: older episodes have no frames marked as show audio, so stop early.
+    const spot = await mapLimit([0.3, 0.5, 0.7].map((x) => x * fileDuration), probe);
+    if (!spot.includes(true)) return null;
+
+    const kinds = await mapLimit(times, probe);
     if (kinds.includes(null) || !kinds.includes(true)) return null;
     if (!kinds.includes(false)) return [];
 
     // Binary-search each show/ad transition down to about one frame.
     const edgeIdx = [];
     for (let i = 1; i < times.length; i++) if (kinds[i] !== kinds[i - 1]) edgeIdx.push(i);
+    total = done + edgeIdx.length * EDGE_PROBES;
+    onProgress(done, total);
     const edges = await Promise.all(edgeIdx.map(async (i) => {
       let lo = times[i - 1];
       let hi = times[i];
       const loKind = kinds[i - 1];
       while (hi - lo > PRECISION) {
         const mid = (lo + hi) / 2;
-        const k = await kindAt(url, tagSize, mid, signal);
+        const k = await probe(mid);
         if (k === null) throw new Error("unexpected MP3 frame");
         if (k === loKind) lo = mid;
         else hi = mid;

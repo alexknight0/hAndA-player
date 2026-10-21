@@ -130,9 +130,9 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   position: absolute;
   /* Inset by half the thumb width so segments line up with the thumb's travel. */
   left: 9px;
-  right: 7px;
+  right: 5px;
   top: 50%;
-  height: 8px;
+  height: 12px;
   transform: translateY(-50%);
   pointer-events: none;
 }
@@ -141,16 +141,16 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   position: absolute;
   top: 0;
   bottom: 0;
-  min-width: 2px;
-  background: #343b45;
-  border-radius: 2px;
+  min-width: 3px;
+  background: #4b5563;
+  border-radius: 3px;
   overflow: hidden;
 }
 
-.seg.active { background: #4a5360; }
+.seg.active { background: #6b7685; }
 .seg .fill { height: 100%; width: 0; background: var(--accent); }
-.seg.ad { background: repeating-linear-gradient(135deg, #2a3038 0 3px, #39414b 3px 6px); }
-.seg.ad .fill { background: #8a6d1c; }
+.seg.ad { background: repeating-linear-gradient(135deg, #7a2e36 0 3px, #b0454f 3px 6px); }
+.seg.ad .fill { background: transparent; }
 
 .seek input {
   position: absolute;

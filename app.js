@@ -325,7 +325,7 @@ function renderTrack() {
     ...pieces.filter((p) => p.end - p.start > 2).map((p) => {
       const seg = el("div", { className: p.ad ? "seg ad" : "seg" }, el("div", { className: "fill" }));
       seg.style.left = `${(p.start / total) * 100}%`;
-      seg.style.width = `calc(${((p.end - p.start) / total) * 100}% - 2px)`;
+      seg.style.width = `calc(${((p.end - p.start) / total) * 100}% - 4px)`;
       seg.dataset.start = p.start;
       seg.dataset.end = p.end;
       if (!p.ad) seg.dataset.chapter = p.chapter;
@@ -372,11 +372,18 @@ function syncUi() {
 
 function seekTo(f) {
   f = Math.max(0, Math.min(fileDuration() || Infinity, f));
+  // Ads are skipped: landing inside one jumps to where it ends.
+  const ad = adAt(f);
+  if (ad) f = Math.min(ad.end, fileDuration() || ad.end);
   audio.currentTime = f;
   seek.value = f;
   syncUi();
   savePos();
 }
+
+// Skip by episode time, so ads count as zero length (going back from just
+// after an ad lands before it rather than inside it).
+const skipBy = (sec) => seekTo(toFileTime(Math.max(0, toEpisodeTime(audio.currentTime) + sec)));
 
 function updateTimes() {
   const f = dragging ? Number(seek.value) : resumeAt !== null ? toFileTime(resumeAt) : audio.currentTime;
@@ -431,8 +438,8 @@ function setupMediaSession() {
   const handlers = {
     play: () => play(),
     pause: () => audio.pause(),
-    seekbackward: (e) => seekTo(audio.currentTime - (e.seekOffset || SKIP_SECONDS)),
-    seekforward: (e) => seekTo(audio.currentTime + (e.seekOffset || SKIP_SECONDS)),
+    seekbackward: (e) => skipBy(-(e.seekOffset || SKIP_SECONDS)),
+    seekforward: (e) => skipBy(e.seekOffset || SKIP_SECONDS),
     seekto: (e) => seekTo(e.seekTime),
     // Previous/next track buttons jump between chapters.
     previoustrack: () => {
@@ -460,8 +467,8 @@ function play() {
 }
 
 $("play").addEventListener("click", () => (audio.paused ? play() : audio.pause()));
-$("back10").addEventListener("click", () => { applyResume(true); seekTo(audio.currentTime - SKIP_SECONDS); });
-$("fwd10").addEventListener("click", () => { applyResume(true); seekTo(audio.currentTime + SKIP_SECONDS); });
+$("back10").addEventListener("click", () => { applyResume(true); skipBy(-SKIP_SECONDS); });
+$("fwd10").addEventListener("click", () => { applyResume(true); skipBy(SKIP_SECONDS); });
 $("back").addEventListener("click", () => { location.hash = ""; });
 $("refresh").addEventListener("click", loadEpisodes);
 $("mark-done").addEventListener("click", () => setDone(current.guid, !isDone(current.guid)));
@@ -485,6 +492,8 @@ audio.addEventListener("loadedmetadata", () => {
   syncUi();
 });
 audio.addEventListener("timeupdate", () => {
+  // Auto-skip ads (only known on episodes whose ads could be detected; see ads.js).
+  if (!dragging && resumeAt === null && adAt(audio.currentTime)) return seekTo(audio.currentTime);
   if (!dragging && resumeAt === null) syncUi();
   if (Math.abs(audio.currentTime - lastSaved) >= SAVE_EVERY_SECONDS) savePos();
 });

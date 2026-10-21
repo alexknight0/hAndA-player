@@ -53,8 +53,7 @@ function fileDuration() {
 // Episode length without ads, matching the episode list.
 function episodeDuration() {
   const f = fileDuration();
-  // Until the ad map is known the file length includes ads, so use the list's length.
-  if (!f || !adsSettled) return (current && listDuration(current)) || f;
+  if (!f) return current?.durationSec || 0;
   return toEpisodeTime(f);
 }
 
@@ -205,7 +204,6 @@ function openEpisode(ep) {
   ads = [];
   adsSettled = false;
   streamInfo = null;
-  setStatus($("ad-status"), "");
   renderChapters();
 
   audio.src = ep.url;
@@ -257,8 +255,6 @@ async function detectAds(ep, signal) {
     if (cached && Math.abs(cached.fileDuration - fileDuration()) < 0.5) {
       ads = cached.ads;
     } else if (streamInfo) {
-      // Everything else is already usable; just show that detection is running.
-      setStatus($("ad-status"), "Detecting ads…", true);
       const found = await Ads.detect(streamInfo.url, streamInfo.tagSize, fileDuration(), signal);
       if (current !== ep) return;
       ads = found || [];
@@ -268,7 +264,6 @@ async function detectAds(ep, signal) {
     if (err.name === "AbortError") return;
     ads = []; // play on with unadjusted times
   }
-  setStatus($("ad-status"), "");
   adsSettled = true;
   rememberDuration(ep.guid, episodeDuration());
   applyResume();
@@ -279,10 +274,9 @@ async function detectAds(ep, signal) {
   if (resumeAt === null && adAt(audio.currentTime)) seekTo(audio.currentTime);
 }
 
-// The seek bar shows a loading placeholder until the audio length is known. Ad
-// detection doesn't block it: the bar and chapters update when the ad map arrives.
+// The seek bar shows a loading placeholder until the audio length and ad map are known.
 function updateLoading(failed = false) {
-  const loading = Boolean(current) && !failed && !fileDuration();
+  const loading = Boolean(current) && !failed && !(fileDuration() && adsSettled);
   $("seek-wrap").classList.toggle("loading", loading);
   $("seek-wrap").setAttribute("aria-busy", String(loading));
 }

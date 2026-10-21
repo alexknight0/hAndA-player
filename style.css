@@ -370,6 +370,3 @@ body:not(.locked) .gate { display: none; }
   .ctrl.play.busy::after { animation-duration: 2.5s; }
   .seek.loading .seek-track { animation: none; }
 }
-
-/* "Detecting ads…" under the seek bar; doesn't block anything else */
-.ad-status { font-size: 0.85rem; padding: 0; margin: 4px 0 0; text-align: center; }

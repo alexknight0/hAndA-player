@@ -343,5 +343,30 @@ async function route() {
   renderList(); // refresh "listened" progress
 }
 
-window.addEventListener("hashchange", route);
-loadEpisodes().then(route);
+// ---------- password gate ----------
+// Cosmetic only: keeps casual visitors from seeing the content. Anyone can read
+// this source (or the public podcast feed) directly.
+const PASSWORD = "alex";
+const UNLOCK_KEY = "unlocked";
+
+function startApp() {
+  document.body.classList.remove("locked");
+  window.addEventListener("hashchange", route);
+  loadEpisodes().then(route);
+}
+
+if (localStorage.getItem(UNLOCK_KEY) === "1") {
+  startApp();
+} else {
+  $("gate-pw").focus();
+  $("gate").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if ($("gate-pw").value === PASSWORD) {
+      localStorage.setItem(UNLOCK_KEY, "1"); // remember on this device
+      startApp();
+    } else {
+      $("gate-error").textContent = "Wrong password.";
+      $("gate-pw").select();
+    }
+  });
+}
